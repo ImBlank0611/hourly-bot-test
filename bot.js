@@ -8,12 +8,34 @@
 const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const cron = require("node-cron");
 const fs = require("fs");
-const config = require("./config.json");
 const { resolveTimezone } = require("./timezones");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-// Persistent message ID storage — survives bot restarts
+// ── Config: reads from environment variables (Railway) or config.json (local) ──
+let config;
+if (process.env.BOT_TOKEN) {
+  // Running on Railway — build config from env vars
+  config = {
+    botToken: process.env.BOT_TOKEN,
+    models: [
+      {
+        name: process.env.MODEL_NAME,
+        channelId: process.env.CHANNEL_ID,
+        location: process.env.LOCATION,
+        color: process.env.COLOR || "#ff6b9d",
+        scheduleRaw: process.env.SCHEDULE,
+      },
+    ],
+  };
+  console.log("✅ Loaded config from environment variables");
+} else {
+  // Running locally — use config.json
+  config = require("./config.json");
+  console.log("✅ Loaded config from config.json");
+}
+
+// ── Persistent message ID storage ────────────────────────────
 const CACHE_FILE = "./lastMessages.json";
 
 function loadLastMessages() {
@@ -155,7 +177,7 @@ async function sendHourlyUpdates() {
       const channel = await client.channels.fetch(model.channelId);
       if (!channel) continue;
 
-      // Delete the previous message if we have one saved
+      // Delete previous message if saved
       if (lastMessages[model.channelId]) {
         try {
           const oldMsg = await channel.messages.fetch(lastMessages[model.channelId]);
@@ -195,7 +217,6 @@ async function sendHourlyUpdates() {
 
       embed.setFooter({ text: `Hourly update • ${new Date().toUTCString()}` });
 
-      // Send new message and save its ID to file (persists across restarts)
       const sent = await channel.send({ embeds: [embed] });
       lastMessages[model.channelId] = sent.id;
       saveLastMessages(lastMessages);
