@@ -1,18 +1,19 @@
-// ============================================================
-// Discord Hourly Status Bot — Chatter Manager Edition
-// ============================================================
-// Requirements: npm install discord.js node-cron
-// Run: node bot.js
-// ============================================================
-
 const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const cron = require("node-cron");
 const fs = require("fs");
 const { resolveTimezone } = require("./timezones");
 
+// DEBUG - print env vars so we can verify Railway passes them
+console.log("ENV CHECK:", {
+  BOT_TOKEN: process.env.BOT_TOKEN ? "SET" : "MISSING",
+  MODEL_NAME: process.env.MODEL_NAME || "MISSING",
+  CHANNEL_ID: process.env.CHANNEL_ID || "MISSING",
+  LOCATION: process.env.LOCATION || "MISSING",
+  SCHEDULE: process.env.SCHEDULE ? "SET" : "MISSING",
+});
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-// ── Config: env vars (Railway) or config.json (local) ────────
 let config;
 if (process.env.BOT_TOKEN) {
   config = {
@@ -25,91 +26,67 @@ if (process.env.BOT_TOKEN) {
       scheduleRaw: process.env.SCHEDULE,
     }],
   };
-  console.log("✅ Loaded config from environment variables");
+  console.log("Loaded config from environment variables");
 } else {
   try {
     config = JSON.parse(fs.readFileSync("./config.json", "utf8"));
-    console.log("✅ Loaded config from config.json");
+    console.log("Loaded config from config.json");
   } catch (e) {
-    console.error("❌ No BOT_TOKEN env var set and no config.json found.");
+    console.error("No BOT_TOKEN env var set and no config.json found.");
     process.exit(1);
   }
 }
 
-// ── Persistent message ID storage ────────────────────────────
 const CACHE_FILE = "./lastMessages.json";
 
 function loadLastMessages() {
   try {
-    if (fs.existsSync(CACHE_FILE)) {
-      return JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"));
-    }
+    if (fs.existsSync(CACHE_FILE)) return JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"));
   } catch (e) {}
   return {};
 }
 
 function saveLastMessages(data) {
-  try {
-    fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2));
-  } catch (e) {
-    console.warn("⚠️  Could not save message cache:", e.message);
-  }
+  try { fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2)); } catch (e) {}
 }
 
 const lastMessages = loadLastMessages();
-
-// ── Schedule Parser ───────────────────────────────────────────
 
 function parseSchedule(raw) {
   const tokenRegex = /(\d{1,2}(?::\d{2})?(?:am|pm)?)\s+([^0-9]+?)(?=\d{1,2}(?::\d{2})?(?:am|pm)?|$)/gi;
   const entries = [];
   let match;
-
   while ((match = tokenRegex.exec(raw.trim())) !== null) {
     const timeStr = match[1].trim().toLowerCase();
     const activity = match[2].trim().replace(/\s+/g, " ");
     if (!activity) continue;
-
     let hour, minute = 0;
     const hasAmPm = /am|pm/.test(timeStr);
     const timePart = timeStr.replace(/am|pm/, "");
     const [h, m] = timePart.split(":").map(Number);
-    hour = h;
-    minute = m || 0;
-
+    hour = h; minute = m || 0;
     if (hasAmPm) {
       const isPm = timeStr.includes("pm");
       if (isPm && hour !== 12) hour += 12;
       if (!isPm && hour === 12) hour = 0;
     }
-
     entries.push({ hour, minute, activity });
   }
-
   entries.sort((a, b) => (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute));
-
   const schedule = [];
   for (let i = 0; i < entries.length; i++) {
     const curr = entries[i];
     const next = entries[(i + 1) % entries.length];
     const pad = (n) => String(n).padStart(2, "0");
-    schedule.push({
-      start: `${pad(curr.hour)}:${pad(curr.minute)}`,
-      end: `${pad(next.hour)}:${pad(next.minute)}`,
-      activity: curr.activity,
-    });
+    schedule.push({ start: `${pad(curr.hour)}:${pad(curr.minute)}`, end: `${pad(next.hour)}:${pad(next.minute)}`, activity: curr.activity });
   }
-
   return schedule;
 }
-
-// ── Helpers ───────────────────────────────────────────────────
 
 function getCurrentActivity(schedule, timezone) {
   const now = new Date().toLocaleString("en-US", { timeZone: timezone });
   const localTime = new Date(now);
   const currentMinutes = localTime.getHours() * 60 + localTime.getMinutes();
-
   for (const block of schedule) {
     const [sh, sm] = block.start.split(":").map(Number);
     const [eh, em] = block.end.split(":").map(Number);
@@ -123,12 +100,7 @@ function getCurrentActivity(schedule, timezone) {
 }
 
 function formatTime(timezone) {
-  return new Date().toLocaleTimeString("en-US", {
-    timeZone: timezone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
+  return new Date().toLocaleTimeString("en-US", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hour12: true });
 }
 
 function getStatusEmoji(activity) {
@@ -154,7 +126,6 @@ function getNextActivity(schedule, timezone) {
   const now = new Date().toLocaleString("en-US", { timeZone: timezone });
   const localTime = new Date(now);
   const currentMinutes = localTime.getHours() * 60 + localTime.getMinutes();
-
   for (let i = 0; i < schedule.length; i++) {
     const block = schedule[i];
     const [sh, sm] = block.start.split(":").map(Number);
@@ -163,14 +134,10 @@ function getNextActivity(schedule, timezone) {
     let blockEnd = eh * 60 + em;
     if (blockEnd <= blockStart) blockEnd += 24 * 60;
     const adjusted = currentMinutes < blockStart ? currentMinutes + 24 * 60 : currentMinutes;
-    if (adjusted >= blockStart && adjusted < blockEnd) {
-      return schedule[(i + 1) % schedule.length];
-    }
+    if (adjusted >= blockStart && adjusted < blockEnd) return schedule[(i + 1) % schedule.length];
   }
   return schedule[0];
 }
-
-// ── Main send function ────────────────────────────────────────
 
 async function sendHourlyUpdates() {
   for (const model of config.models) {
@@ -178,14 +145,13 @@ async function sendHourlyUpdates() {
       const channel = await client.channels.fetch(model.channelId);
       if (!channel) continue;
 
-      // Delete previous message if saved
       if (lastMessages[model.channelId]) {
         try {
           const oldMsg = await channel.messages.fetch(lastMessages[model.channelId]);
           await oldMsg.delete();
-          console.log(`[${new Date().toISOString()}] 🗑️  Deleted old message for ${model.name}`);
+          console.log("Deleted old message for " + model.name);
         } catch (e) {
-          console.warn(`⚠️  Could not delete old message for ${model.name}: ${e.message}`);
+          console.warn("Could not delete old message: " + e.message);
         }
       }
 
@@ -199,48 +165,27 @@ async function sendHourlyUpdates() {
       const embed = new EmbedBuilder()
         .setColor(model.color || "#ff6b9d")
         .setTitle(`${emoji} ${model.name}`)
-        .setDescription(
-          activity
-            ? `**Currently:** ${activity.activity}`
-            : `**Currently:** Off schedule 😴`
-        )
+        .setDescription(activity ? `**Currently:** ${activity.activity}` : `**Currently:** Off schedule 😴`)
         .addFields(
           { name: "🕐 His Local Time", value: `\`${timeStr}\``, inline: true },
           { name: "📍 Location", value: `\`${model.location}\``, inline: true }
         );
 
-      if (next) {
-        embed.addFields({
-          name: "⏭️ Up Next",
-          value: `${getStatusEmoji(next)} ${next.activity} at ${next.start}`,
-        });
-      }
-
+      if (next) embed.addFields({ name: "⏭️ Up Next", value: `${getStatusEmoji(next)} ${next.activity} at ${next.start}` });
       embed.setFooter({ text: `Hourly update • ${new Date().toUTCString()}` });
 
       const sent = await channel.send({ embeds: [embed] });
       lastMessages[model.channelId] = sent.id;
       saveLastMessages(lastMessages);
-
-      console.log(`[${new Date().toISOString()}] ✅ Sent update for ${model.name} (${model.location} → ${timezone})`);
+      console.log("Sent update for " + model.name);
     } catch (err) {
-      console.error(`❌ Error for ${model.name}:`, err.message);
+      console.error("Error for " + model.name + ": " + err.message);
     }
   }
 }
 
-// ── Bot ready ─────────────────────────────────────────────────
-
 client.once("clientReady", () => {
-  console.log(`✅ Bot logged in as ${client.user.tag}`);
-
-  for (const model of config.models) {
-    const tz = resolveTimezone(model.location);
-    const schedule = parseSchedule(model.scheduleRaw);
-    console.log(`\n📋 ${model.name} (${model.location} → ${tz})`);
-    schedule.forEach(s => console.log(`   ${s.start} – ${s.end}  ${s.activity}`));
-  }
-
+  console.log("Bot logged in as " + client.user.tag);
   sendHourlyUpdates();
   cron.schedule("0 * * * *", sendHourlyUpdates);
 });
