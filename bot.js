@@ -12,27 +12,28 @@ const { resolveTimezone } = require("./timezones");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-// ── Config: reads from environment variables (Railway) or config.json (local) ──
+// ── Config: env vars (Railway) or config.json (local) ────────
 let config;
 if (process.env.BOT_TOKEN) {
-  // Running on Railway — build config from env vars
   config = {
     botToken: process.env.BOT_TOKEN,
-    models: [
-      {
-        name: process.env.MODEL_NAME,
-        channelId: process.env.CHANNEL_ID,
-        location: process.env.LOCATION,
-        color: process.env.COLOR || "#ff6b9d",
-        scheduleRaw: process.env.SCHEDULE,
-      },
-    ],
+    models: [{
+      name: process.env.MODEL_NAME,
+      channelId: process.env.CHANNEL_ID,
+      location: process.env.LOCATION,
+      color: process.env.COLOR || "#ff6b9d",
+      scheduleRaw: process.env.SCHEDULE,
+    }],
   };
   console.log("✅ Loaded config from environment variables");
 } else {
-  // Running locally — use config.json
-  config = require("./config.json");
-  console.log("✅ Loaded config from config.json");
+  try {
+    config = JSON.parse(fs.readFileSync("./config.json", "utf8"));
+    console.log("✅ Loaded config from config.json");
+  } catch (e) {
+    console.error("❌ No BOT_TOKEN env var set and no config.json found.");
+    process.exit(1);
+  }
 }
 
 // ── Persistent message ID storage ────────────────────────────
