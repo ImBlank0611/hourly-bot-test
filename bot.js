@@ -10,6 +10,7 @@ console.log("ENV CHECK:", {
   CHANNEL_ID: process.env.CHANNEL_ID || "MISSING",
   LOCATION: process.env.LOCATION || "MISSING",
   SCHEDULE: process.env.SCHEDULE ? "SET" : "MISSING",
+  NOTICE: process.env.NOTICE || "(none)",
 });
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -24,6 +25,7 @@ if (process.env.BOT_TOKEN) {
       location: process.env.LOCATION,
       color: process.env.COLOR || "#ff6b9d",
       scheduleRaw: process.env.SCHEDULE,
+      notice: process.env.NOTICE || "", // ← special message/reminder
     }],
   };
   console.log("Loaded config from environment variables");
@@ -172,6 +174,12 @@ async function sendHourlyUpdates() {
         );
 
       if (next) embed.addFields({ name: "⏭️ Up Next", value: `${getStatusEmoji(next)} ${next.activity} at ${next.start}` });
+
+      // ← Add notice/reminder if set
+      if (model.notice && model.notice.trim() !== "") {
+        embed.addFields({ name: "📢 Notice", value: `> ${model.notice.trim()}` });
+      }
+
       embed.setFooter({ text: `Hourly update • ${new Date().toUTCString()}` });
 
       const sent = await channel.send({ embeds: [embed] });
