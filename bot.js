@@ -5,11 +5,6 @@ const { resolveTimezone } = require("./timezones");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-// Supports multiple models via env vars:
-// MODEL_1_NAME, MODEL_1_CHANNEL_ID, MODEL_1_LOCATION, MODEL_1_SCHEDULE, MODEL_1_COLOR
-// MODEL_2_NAME, MODEL_2_CHANNEL_ID, MODEL_2_LOCATION, MODEL_2_SCHEDULE, MODEL_2_COLOR
-// ... and so on
-
 let config;
 if (process.env.BOT_TOKEN) {
   const models = [];
@@ -21,6 +16,7 @@ if (process.env.BOT_TOKEN) {
       location: process.env[`MODEL_${i}_LOCATION`],
       color: process.env[`MODEL_${i}_COLOR`] || "#ff6b9d",
       scheduleRaw: process.env[`MODEL_${i}_SCHEDULE`],
+      notice: process.env[`MODEL_${i}_NOTICE`] || null,
     });
     i++;
   }
@@ -33,6 +29,7 @@ if (process.env.BOT_TOKEN) {
       location: process.env.LOCATION,
       color: process.env.COLOR || "#ff6b9d",
       scheduleRaw: process.env.SCHEDULE,
+      notice: process.env.NOTICE || null,
     });
   }
 
@@ -176,6 +173,9 @@ async function sendHourlyUpdates() {
         );
 
       if (next) embed.addFields({ name: "⏭️ Up Next", value: `${getStatusEmoji(next)} ${next.activity} at ${next.start}` });
+
+      if (model.notice) embed.addFields({ name: "⚠️ Notice", value: model.notice });
+
       embed.setFooter({ text: `Hourly update • ${new Date().toUTCString()}` });
 
       const sent = await channel.send({ embeds: [embed] });
