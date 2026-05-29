@@ -3,32 +3,42 @@ const cron = require("node-cron");
 const fs = require("fs");
 const { resolveTimezone } = require("./timezones");
 
-// DEBUG - print env vars so we can verify Railway passes them
-console.log("ENV CHECK:", {
-  BOT_TOKEN: process.env.BOT_TOKEN ? "SET" : "MISSING",
-  MODEL_NAME: process.env.MODEL_NAME || "MISSING",
-  CHANNEL_ID: process.env.CHANNEL_ID || "MISSING",
-  LOCATION: process.env.LOCATION || "MISSING",
-  SCHEDULE: process.env.SCHEDULE ? "SET" : "MISSING",
-  NOTICE: process.env.NOTICE || "(none)",
-});
-
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+
+// Supports multiple models via env vars:
+// MODEL_1_NAME, MODEL_1_CHANNEL_ID, MODEL_1_LOCATION, MODEL_1_SCHEDULE, MODEL_1_COLOR
+// MODEL_2_NAME, MODEL_2_CHANNEL_ID, MODEL_2_LOCATION, MODEL_2_SCHEDULE, MODEL_2_COLOR
+// ... and so on
 
 let config;
 if (process.env.BOT_TOKEN) {
-  config = {
-    botToken: process.env.BOT_TOKEN,
-    models: [{
+  const models = [];
+  let i = 1;
+  while (process.env[`MODEL_${i}_NAME`]) {
+    models.push({
+      name: process.env[`MODEL_${i}_NAME`],
+      channelId: process.env[`MODEL_${i}_CHANNEL_ID`],
+      location: process.env[`MODEL_${i}_LOCATION`],
+      color: process.env[`MODEL_${i}_COLOR`] || "#ff6b9d",
+      scheduleRaw: process.env[`MODEL_${i}_SCHEDULE`],
+    });
+    i++;
+  }
+
+  // Fallback to old single-model env vars if no numbered ones found
+  if (models.length === 0 && process.env.MODEL_NAME) {
+    models.push({
       name: process.env.MODEL_NAME,
       channelId: process.env.CHANNEL_ID,
       location: process.env.LOCATION,
       color: process.env.COLOR || "#ff6b9d",
       scheduleRaw: process.env.SCHEDULE,
-      notice: process.env.NOTICE || "", // ← special message/reminder
-    }],
-  };
-  console.log("Loaded config from environment variables");
+    });
+  }
+
+  config = { botToken: process.env.BOT_TOKEN, models };
+  console.log(`Loaded ${models.length} model(s) from environment variables`);
+  models.forEach((m, idx) => console.log(`  Model ${idx + 1}: ${m.name} — ${m.location}`));
 } else {
   try {
     config = JSON.parse(fs.readFileSync("./config.json", "utf8"));
@@ -40,18 +50,13 @@ if (process.env.BOT_TOKEN) {
 }
 
 const CACHE_FILE = "./lastMessages.json";
-
 function loadLastMessages() {
-  try {
-    if (fs.existsSync(CACHE_FILE)) return JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"));
-  } catch (e) {}
+  try { if (fs.existsSync(CACHE_FILE)) return JSON.parse(fs.readFileSync(CACHE_FILE, "utf8")); } catch (e) {}
   return {};
 }
-
 function saveLastMessages(data) {
   try { fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2)); } catch (e) {}
 }
-
 const lastMessages = loadLastMessages();
 
 function parseSchedule(raw) {
@@ -151,10 +156,7 @@ async function sendHourlyUpdates() {
         try {
           const oldMsg = await channel.messages.fetch(lastMessages[model.channelId]);
           await oldMsg.delete();
-          console.log("Deleted old message for " + model.name);
-        } catch (e) {
-          console.warn("Could not delete old message: " + e.message);
-        }
+        } catch (e) {}
       }
 
       const timezone = resolveTimezone(model.location);
@@ -174,12 +176,6 @@ async function sendHourlyUpdates() {
         );
 
       if (next) embed.addFields({ name: "⏭️ Up Next", value: `${getStatusEmoji(next)} ${next.activity} at ${next.start}` });
-
-      // ← Add notice/reminder if set
-      if (model.notice && model.notice.trim() !== "") {
-        embed.addFields({ name: "📢 Notice", value: `> ${model.notice.trim()}` });
-      }
-
       embed.setFooter({ text: `Hourly update • ${new Date().toUTCString()}` });
 
       const sent = await channel.send({ embeds: [embed] });
