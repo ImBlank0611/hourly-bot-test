@@ -56,6 +56,14 @@ function saveLastMessages(data) {
 }
 const lastMessages = loadLastMessages();
 
+const pad = (n) => String(n).padStart(2, "0");
+
+function toAmPm(hour, minute) {
+  const period = hour >= 12 ? "pm" : "am";
+  const h = hour % 12 || 12;
+  return minute === 0 ? `${h}${period}` : `${h}:${pad(minute)}${period}`;
+}
+
 function parseSchedule(raw) {
   const tokenRegex = /(\d{1,2}(?::\d{2})?(?:am|pm)?)\s+([^0-9]+?)(?=\d{1,2}(?::\d{2})?(?:am|pm)?|$)/gi;
   const entries = [];
@@ -81,13 +89,13 @@ function parseSchedule(raw) {
   for (let i = 0; i < entries.length; i++) {
     const curr = entries[i];
     const next = entries[(i + 1) % entries.length];
-    const pad = (n) => String(n).padStart(2, "0");
-    function toAmPm(hour, minute) {
-  const period = hour >= 12 ? "pm" : "am";
-  const h = hour % 12 || 12;
-  return minute === 0 ? `${h}${period}` : `${h}:${pad(minute)}${period}`;
-}
-schedule.push({ start: `${pad(curr.hour)}:${pad(curr.minute)}`, end: `${pad(next.hour)}:${pad(next.minute)}`, activity: curr.activity, startDisplay: toAmPm(curr.hour, curr.minute) });
+    schedule.push({
+      start: `${pad(curr.hour)}:${pad(curr.minute)}`,
+      end: `${pad(next.hour)}:${pad(next.minute)}`,
+      activity: curr.activity,
+      startDisplay: toAmPm(curr.hour, curr.minute),
+      endDisplay: toAmPm(next.hour, next.minute),
+    });
   }
   return schedule;
 }
@@ -117,17 +125,20 @@ function getStatusEmoji(activity) {
   const l = activity.activity.toLowerCase();
   if (l.includes("sleep") || l.includes("rest") || l.includes("bed")) return "😴";
   if (l.includes("wake") || l.includes("waking") || l.includes("morning")) return "🌅";
-  if (l.includes("gym") || l.includes("workout") || l.includes("exercise")) return "💪";
+  if (l.includes("gym") || l.includes("workout") || l.includes("exercise") || l.includes("training")) return "💪";
   if (l.includes("breakfast")) return "🥐";
   if (l.includes("lunch")) return "🥗";
-  if (l.includes("dinner") || l.includes("eat") || l.includes("food")) return "🍽️";
+  if (l.includes("dinner") || l.includes("eat") || l.includes("food") || l.includes("cooking") || l.includes("meal")) return "🍽️";
   if (l.includes("shower") || l.includes("bath")) return "🚿";
-  if (l.includes("content") || l.includes("shoot") || l.includes("photo") || l.includes("video")) return "📸";
+  if (l.includes("content") || l.includes("shoot") || l.includes("photo") || l.includes("video") || l.includes("filming") || l.includes("editing")) return "📸";
   if (l.includes("chat") || l.includes("reply") || l.includes("message") || l.includes("log on") || l.includes("online")) return "💬";
   if (l.includes("live") || l.includes("stream")) return "🔴";
   if (l.includes("walk") || l.includes("dog")) return "🐾";
   if (l.includes("relax") || l.includes("chill") || l.includes("free")) return "☕";
   if (l.includes("travel") || l.includes("commute") || l.includes("drive")) return "🚗";
+  if (l.includes("work") || l.includes("admin") || l.includes("planning") || l.includes("brainstorm")) return "💼";
+  if (l.includes("cappuccino") || l.includes("coffee")) return "☕";
+  if (l.includes("youtube")) return "▶️";
   return "✨";
 }
 
@@ -146,6 +157,35 @@ function getNextActivity(schedule, timezone) {
     if (adjusted >= blockStart && adjusted < blockEnd) return schedule[(i + 1) % schedule.length];
   }
   return schedule[0];
+}
+
+function getProgressBar(schedule, timezone) {
+  const now = new Date().toLocaleString("en-US", { timeZone: timezone });
+  const localTime = new Date(now);
+  const currentMinutes = localTime.getHours() * 60 + localTime.getMinutes();
+  for (const block of schedule) {
+    const [sh, sm] = block.start.split(":").map(Number);
+    const [eh, em] = block.end.split(":").map(Number);
+    const blockStart = sh * 60 + sm;
+    let blockEnd = eh * 60 + em;
+    if (blockEnd <= blockStart) blockEnd += 24 * 60;
+    const adjusted = currentMinutes < blockStart ? currentMinutes + 24 * 60 : currentMinutes;
+    if (adjusted >= blockStart && adjusted < blockEnd) {
+      const elapsed = adjusted - blockStart;
+      const duration = blockEnd - blockStart;
+      const percent = Math.round((elapsed / duration) * 100);
+      const filled = Math.round(percent / 10);
+      const bar = "█".repeat(filled) + "░".repeat(10 - filled);
+      return `\`${bar}\` ${percent}%`;
+    }
+  }
+  return null;
+}
+
+function buildTodaySchedule(schedule) {
+  return schedule
+    .map(block => `${getStatusEmoji(block)} \`${block.startDisplay}\` ${block.activity}`)
+    .join("\n");
 }
 
 async function sendHourlyUpdates() {
@@ -167,21 +207,40 @@ async function sendHourlyUpdates() {
       const next = getNextActivity(schedule, timezone);
       const timeStr = formatTime(timezone);
       const emoji = getStatusEmoji(activity);
+      const progressBar = getProgressBar(schedule, timezone);
+      const todaySchedule = buildTodaySchedule(schedule);
 
       const embed = new EmbedBuilder()
         .setColor(model.color || "#ff6b9d")
-        .setTitle(`${emoji} ${model.name}`)
-        .setDescription(activity ? `**Currently:** ${activity.activity}` : `**Currently:** Off schedule 😴`)
+        .setTitle(`${emoji}  ${model.name}'s Status`)
+        .setDescription(
+          `## ${activity ? `${getStatusEmoji(activity)} ${activity.activity}` : "Off schedule 😴"}\n` +
+          (progressBar ? `${progressBar}\n` : "") +
+          (activity ? `*${activity.startDisplay} → ${activity.endDisplay}*` : "")
+        )
         .addFields(
-          { name: "🕐 His Local Time", value: `\`${timeStr}\``, inline: true },
-          { name: "📍 Location", value: `\`${model.location}\``, inline: true }
+          { name: "🕐 Local Time", value: `\`\`\`${timeStr}\`\`\``, inline: true },
+          { name: "📍 Location", value: `\`\`\`${model.location}\`\`\``, inline: true },
         );
 
-      if (next) embed.addFields({ name: "⏭️ Up Next", value: `${getStatusEmoji(next)} ${next.activity} at ${next.startDisplay}` });
+      if (next) {
+        embed.addFields({
+          name: "⏭️ Up Next",
+          value: `${getStatusEmoji(next)} **${next.activity}** at **${next.startDisplay}**`,
+        });
+      }
 
-      if (model.notice) embed.addFields({ name: "⚠️ Notice", value: model.notice });
+      embed.addFields({
+        name: "📅 Today's Schedule",
+        value: todaySchedule,
+      });
+
+      if (model.notice) {
+        embed.addFields({ name: "⚠️ Notice", value: `> ${model.notice}` });
+      }
 
       embed.setFooter({ text: `Hourly update • ${new Date().toUTCString()}` });
+      embed.setTimestamp();
 
       const sent = await channel.send({ embeds: [embed] });
       lastMessages[model.channelId] = sent.id;
