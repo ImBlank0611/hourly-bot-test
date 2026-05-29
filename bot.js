@@ -82,7 +82,12 @@ function parseSchedule(raw) {
     const curr = entries[i];
     const next = entries[(i + 1) % entries.length];
     const pad = (n) => String(n).padStart(2, "0");
-    schedule.push({ start: `${pad(curr.hour)}:${pad(curr.minute)}`, end: `${pad(next.hour)}:${pad(next.minute)}`, activity: curr.activity });
+    function toAmPm(hour, minute) {
+  const period = hour >= 12 ? "pm" : "am";
+  const h = hour % 12 || 12;
+  return minute === 0 ? `${h}${period}` : `${h}:${pad(minute)}${period}`;
+}
+schedule.push({ start: `${pad(curr.hour)}:${pad(curr.minute)}`, end: `${pad(next.hour)}:${pad(next.minute)}`, activity: curr.activity, startDisplay: toAmPm(curr.hour, curr.minute) });
   }
   return schedule;
 }
@@ -172,7 +177,7 @@ async function sendHourlyUpdates() {
           { name: "📍 Location", value: `\`${model.location}\``, inline: true }
         );
 
-      if (next) embed.addFields({ name: "⏭️ Up Next", value: `${getStatusEmoji(next)} ${next.activity} at ${next.start}` });
+      if (next) embed.addFields({ name: "⏭️ Up Next", value: `${getStatusEmoji(next)} ${next.activity} at ${next.startDisplay}` });
 
       if (model.notice) embed.addFields({ name: "⚠️ Notice", value: model.notice });
 
