@@ -21,7 +21,6 @@ if (process.env.BOT_TOKEN) {
     i++;
   }
 
-  // Fallback to old single-model env vars if no numbered ones found
   if (models.length === 0 && process.env.MODEL_NAME) {
     models.push({
       name: process.env.MODEL_NAME,
@@ -123,22 +122,78 @@ function formatTime(timezone) {
 function getStatusEmoji(activity) {
   if (!activity) return "😴";
   const l = activity.activity.toLowerCase();
-  if (l.includes("sleep") || l.includes("rest") || l.includes("bed")) return "😴";
-  if (l.includes("wake") || l.includes("waking") || l.includes("morning")) return "🌅";
-  if (l.includes("gym") || l.includes("workout") || l.includes("exercise") || l.includes("training")) return "💪";
-  if (l.includes("breakfast")) return "🥐";
+
+  // Sleep
+  if (l.includes("sleep") || l.includes("bed")) return "😴";
+
+  // Wake up
+  if (l.includes("wake up") && l.includes("cappuccino")) return "☕";
+  if (l.includes("wake up") && l.includes("breakfast")) return "🌅";
+  if (l.includes("wake up")) return "🌅";
+
+  // Food & meals
+  if (l.includes("breakfast") && l.includes("cook")) return "🍳";
+  if (l.includes("breakfast")) return "🍳";
   if (l.includes("lunch")) return "🥗";
-  if (l.includes("dinner") || l.includes("eat") || l.includes("food") || l.includes("cooking") || l.includes("meal")) return "🍽️";
+  if (l.includes("dinner") && l.includes("cook")) return "👨‍🍳";
+  if (l.includes("dinner")) return "🍽️";
+  if (l.includes("post workout meal") && l.includes("shower")) return "🚿";
+  if (l.includes("post workout meal") && l.includes("cook")) return "👨‍🍳";
+  if (l.includes("post workout meal")) return "🥩";
+  if (l.includes("meal") && l.includes("cook")) return "👨‍🍳";
+  if (l.includes("meal")) return "🥩";
+  if (l.includes("cook")) return "👨‍🍳";
+  if (l.includes("eat") || l.includes("food")) return "🍽️";
+
+  // Gym & fitness
+  if (l.includes("cardio")) return "🏃";
+  if (l.includes("weight training")) return "🏋️";
+  if (l.includes("gym") && l.includes("training")) return "💪";
+  if (l.includes("gym") || l.includes("workout") || l.includes("exercise") || l.includes("training")) return "💪";
+  if (l.includes("gym or relax")) return "💪";
+
+  // Shower
   if (l.includes("shower") || l.includes("bath")) return "🚿";
-  if (l.includes("content") || l.includes("shoot") || l.includes("photo") || l.includes("video") || l.includes("filming") || l.includes("editing")) return "📸";
-  if (l.includes("chat") || l.includes("reply") || l.includes("message") || l.includes("log on") || l.includes("online")) return "💬";
-  if (l.includes("live") || l.includes("stream")) return "🔴";
-  if (l.includes("walk") || l.includes("dog")) return "🐾";
-  if (l.includes("relax") || l.includes("chill") || l.includes("free")) return "☕";
-  if (l.includes("travel") || l.includes("commute") || l.includes("drive")) return "🚗";
-  if (l.includes("work") || l.includes("admin") || l.includes("planning") || l.includes("brainstorm")) return "💼";
-  if (l.includes("cappuccino") || l.includes("coffee")) return "☕";
+
+  // Walking / steps
+  if (l.includes("walk dog")) return "🐾";
+  if (l.includes("walk") || l.includes("step")) return "🚶";
+
+  // Content & media
+  if (l.includes("editing") && l.includes("youtube")) return "🎬";
   if (l.includes("youtube")) return "▶️";
+  if (l.includes("content filming") || l.includes("filming")) return "🎥";
+  if (l.includes("content creation") && l.includes("of")) return "📱";
+  if (l.includes("content creation") || l.includes("content and coaching")) return "📸";
+  if (l.includes("content planning")) return "📋";
+  if (l.includes("content")) return "📸";
+  if (l.includes("customs")) return "💌";
+  if (l.includes("editing")) return "✂️";
+  if (l.includes("brainstorm")) return "🧠";
+  if (l.includes("planning")) return "📋";
+
+  // Chat / messaging
+  if (l.includes("log on to chat") || l.includes("log on")) return "💬";
+  if (l.includes("replying to messages") || l.includes("reply") || l.includes("message")) return "💬";
+  if (l.includes("chat")) return "💬";
+
+  // Work & business
+  if (l.includes("auction house")) return "🏛️";
+  if (l.includes("coaching clients") || l.includes("coaching")) return "🎯";
+  if (l.includes("finished work")) return "✅";
+  if (l.includes("work") || l.includes("admin") || l.includes("accounting") || l.includes("business")) return "💼";
+
+  // Renovation
+  if (l.includes("painting") || l.includes("renovation")) return "🔨";
+
+  // Relax & hobbies
+  if (l.includes("guitar")) return "🎸";
+  if (l.includes("gaming") || l.includes("game") || l.includes("dota")) return "🎮";
+  if (l.includes("relax") || l.includes("chill") || l.includes("free")) return "☕";
+
+  // Travel
+  if (l.includes("travel") || l.includes("drive") || l.includes("collect")) return "🚗";
+
   return "✨";
 }
 
@@ -157,29 +212,6 @@ function getNextActivity(schedule, timezone) {
     if (adjusted >= blockStart && adjusted < blockEnd) return schedule[(i + 1) % schedule.length];
   }
   return schedule[0];
-}
-
-function getProgressBar(schedule, timezone) {
-  const now = new Date().toLocaleString("en-US", { timeZone: timezone });
-  const localTime = new Date(now);
-  const currentMinutes = localTime.getHours() * 60 + localTime.getMinutes();
-  for (const block of schedule) {
-    const [sh, sm] = block.start.split(":").map(Number);
-    const [eh, em] = block.end.split(":").map(Number);
-    const blockStart = sh * 60 + sm;
-    let blockEnd = eh * 60 + em;
-    if (blockEnd <= blockStart) blockEnd += 24 * 60;
-    const adjusted = currentMinutes < blockStart ? currentMinutes + 24 * 60 : currentMinutes;
-    if (adjusted >= blockStart && adjusted < blockEnd) {
-      const elapsed = adjusted - blockStart;
-      const duration = blockEnd - blockStart;
-      const percent = Math.round((elapsed / duration) * 100);
-      const filled = Math.round(percent / 10);
-      const bar = "█".repeat(filled) + "░".repeat(10 - filled);
-      return `\`${bar}\` ${percent}%`;
-    }
-  }
-  return null;
 }
 
 function buildTodaySchedule(schedule) {
@@ -207,7 +239,6 @@ async function sendHourlyUpdates() {
       const next = getNextActivity(schedule, timezone);
       const timeStr = formatTime(timezone);
       const emoji = getStatusEmoji(activity);
-      const progressBar = getProgressBar(schedule, timezone);
       const todaySchedule = buildTodaySchedule(schedule);
 
       const embed = new EmbedBuilder()
@@ -215,7 +246,6 @@ async function sendHourlyUpdates() {
         .setTitle(`${emoji}  ${model.name}'s Status`)
         .setDescription(
           `## ${activity ? `${getStatusEmoji(activity)} ${activity.activity}` : "Off schedule 😴"}\n` +
-          (progressBar ? `${progressBar}\n` : "") +
           (activity ? `*${activity.startDisplay} → ${activity.endDisplay}*` : "")
         )
         .addFields(
