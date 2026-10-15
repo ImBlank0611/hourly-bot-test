@@ -62,6 +62,12 @@ const lastMessages = loadLastMessages();
 // Set CARD_LIFETIME_MINUTES in Railway to change it.
 const CARD_LIFETIME_MS = (Number(process.env.CARD_LIFETIME_MINUTES) || 60) * 60 * 1000;
 
+// Discord sizes an embed to its content, so the time box would come out narrower than
+// the status box. This adds an invisible line so both stretch to the same width.
+// If they still look different, change CARD_PAD_CHARS in Railway (try 40 to 90).
+const PAD_CHARS = Number(process.env.CARD_PAD_CHARS) || 60;
+const WIDTH_PAD = "\n-# " + "\u3164".repeat(PAD_CHARS);
+
 // Delete any card this bot posted earlier (used on startup, so a redeploy
 // that wipes lastMessages.json doesn't leave a stray card behind).
 async function sweepOldCards(channel) {
@@ -270,18 +276,22 @@ async function sendHourlyUpdates() {
           (whaleTop ? whaleTop + "\n\n" : "") +
           `# ${activity ? `${getStatusEmoji(activity)} ${activity.activity}` : "Off schedule 😴"}\n` +
           (activity ? `### 🕛 ${activity.startDisplay} → ${activity.endDisplay}\n\n` : "") +
-          (next ? `### ⏭️ Up Next  ·  ${getStatusEmoji(next)} ${next.activity} at ${next.startDisplay}\n\n` : "") +
-          `## 🕐 ${timeStr}  ·  📍 ${model.location}`
+          (next ? `### ⏭️ Up Next  ·  ${getStatusEmoji(next)} ${next.activity} at ${next.startDisplay}` : "") +
+          WIDTH_PAD
         );
 
       if (model.notice) {
         embed.addFields({ name: "⚠️ Notice", value: `> ${model.notice}` });
       }
 
-      embed.setFooter({ text: `Hourly update • ${new Date().toUTCString()}` });
-      embed.setTimestamp();
+      // A second grey box with the local time and location in big text, with the footer under it.
+      const clockBox = new EmbedBuilder()
+        .setColor(model.color || "#ff6b9d")
+        .setDescription(`## 🕐 ${timeStr}  ·  📍 ${model.location}` + WIDTH_PAD)
+        .setFooter({ text: `Hourly update • ${new Date().toUTCString()}` })
+        .setTimestamp();
 
-      const sent = await channel.send({ embeds: [embed] });
+      const sent = await channel.send({ embeds: [embed, clockBox] });
       lastMessages[model.channelId] = sent.id;
       saveLastMessages(lastMessages);
 
