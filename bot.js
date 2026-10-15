@@ -77,6 +77,18 @@ async function sweepOldCards(channel) {
   }
 }
 
+// Full-width letters look about twice as big inside a code block (the grey box).
+function toFullWidth(text) {
+  return String(text).replace(/[!-~]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0xfee0)).replace(/ /g, "\u3000");
+}
+
+// A taller, bigger grey box for a value (a blank line above and below it)
+function bigBox(text) {
+  const t = String(text);
+  const shown = t.length <= 14 ? toFullWidth(t) : t;
+  return "```\n\u2800\n" + shown + "\n\u2800\n```";
+}
+
 const pad = (n) => String(n).padStart(2, "0");
 
 function toAmPm(hour, minute) {
@@ -270,8 +282,11 @@ async function sendHourlyUpdates() {
           (whaleTop ? whaleTop + "\n\n" : "") +
           `# ${activity ? `${getStatusEmoji(activity)} ${activity.activity}` : "Off schedule 😴"}\n` +
           (activity ? `### 🕛 ${activity.startDisplay} → ${activity.endDisplay}\n\n` : "") +
-          (next ? `### ⏭️ Up Next  ·  ${getStatusEmoji(next)} ${next.activity} at ${next.startDisplay}\n` : "") +
-          `### 🕐 ${timeStr}  ·  📍 ${model.location}`
+          (next ? `### ⏭️ Up Next  ·  ${getStatusEmoji(next)} ${next.activity} at ${next.startDisplay}` : "")
+        )
+        .addFields(
+          { name: "🕐 Local Time", value: bigBox(timeStr), inline: true },
+          { name: "📍 Location", value: bigBox(model.location), inline: true },
         );
 
       if (model.notice) {
