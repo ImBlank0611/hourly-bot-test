@@ -77,16 +77,10 @@ async function sweepOldCards(channel) {
   }
 }
 
-// Full-width letters look about twice as big inside a code block (the grey box).
-function toFullWidth(text) {
-  return String(text).replace(/[!-~]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0xfee0)).replace(/ /g, "\u3000");
-}
-
-// A taller, bigger grey box for a value (a blank line above and below it)
+// A taller grey box for a value (a blank line above and below it).
+// Text inside a code block can't be made bigger in Discord, only the box.
 function bigBox(text) {
-  const t = String(text);
-  const shown = t.length <= 14 ? toFullWidth(t) : t;
-  return "```\n\u2800\n" + shown + "\n\u2800\n```";
+  return "```\n\u2800\n" + String(text) + "\n\u2800\n```";
 }
 
 const pad = (n) => String(n).padStart(2, "0");
