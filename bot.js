@@ -62,12 +62,6 @@ const lastMessages = loadLastMessages();
 // Set CARD_LIFETIME_MINUTES in Railway to change it.
 const CARD_LIFETIME_MS = (Number(process.env.CARD_LIFETIME_MINUTES) || 60) * 60 * 1000;
 
-// Discord sizes an embed to its content, so the time box would come out narrower than
-// the status box. This adds an invisible line so both stretch to the same width.
-// If they still look different, change CARD_PAD_CHARS in Railway (try 40 to 90).
-const PAD_CHARS = Number(process.env.CARD_PAD_CHARS) || 60;
-const WIDTH_PAD = "\n-# " + "\u3164".repeat(PAD_CHARS);
-
 // Delete any card this bot posted earlier (used on startup, so a redeploy
 // that wipes lastMessages.json doesn't leave a stray card behind).
 async function sweepOldCards(channel) {
@@ -262,7 +256,7 @@ async function sendHourlyUpdates() {
       const timeStr = formatTime(timezone);
       const emoji = getStatusEmoji(activity);
 
-      // Whale rules for today (whales.json and MODEL_n_WHALES): a quoted block at the very top.
+      // Whale rules for today (whales.json and MODEL_n_WHALES): a quoted block at the top.
       const quote = (text) => text.split("\n").map((l) => `> ${l}`).join("\n");
       const whaleTop = getWhaleBlocks(model)
         .slice(0, 5)
@@ -274,24 +268,29 @@ async function sendHourlyUpdates() {
         .setTitle(`${emoji}  ${model.name}'s Status`)
         .setDescription(
           (whaleTop ? whaleTop + "\n\n" : "") +
-          `# ${activity ? `${getStatusEmoji(activity)} ${activity.activity}` : "Off schedule 😴"}\n` +
-          (activity ? `### 🕛 ${activity.startDisplay} → ${activity.endDisplay}\n\n` : "") +
-          (next ? `### ⏭️ Up Next  ·  ${getStatusEmoji(next)} ${next.activity} at ${next.startDisplay}` : "") +
-          WIDTH_PAD
+          `## ${activity ? `${getStatusEmoji(activity)} ${activity.activity}` : "Off schedule 😴"}\n` +
+          (activity ? `*${activity.startDisplay} → ${activity.endDisplay}*` : "")
+        )
+        .addFields(
+          { name: "🕐 Local Time", value: `\`\`\`${timeStr}\`\`\``, inline: true },
+          { name: "📍 Location", value: `\`\`\`${model.location}\`\`\``, inline: true },
         );
+
+      if (next) {
+        embed.addFields({
+          name: "⏭️ Up Next",
+          value: `${getStatusEmoji(next)} **${next.activity}** at **${next.startDisplay}**`,
+        });
+      }
 
       if (model.notice) {
         embed.addFields({ name: "⚠️ Notice", value: `> ${model.notice}` });
       }
 
-      // A second grey box with the local time and location in big text, with the footer under it.
-      const clockBox = new EmbedBuilder()
-        .setColor(model.color || "#ff6b9d")
-        .setDescription(`## 🕐 ${timeStr}  ·  📍 ${model.location}` + WIDTH_PAD)
-        .setFooter({ text: `Hourly update • ${new Date().toUTCString()}` })
-        .setTimestamp();
+      embed.setFooter({ text: `Hourly update • ${new Date().toUTCString()}` });
+      embed.setTimestamp();
 
-      const sent = await channel.send({ embeds: [embed, clockBox] });
+      const sent = await channel.send({ embeds: [embed] });
       lastMessages[model.channelId] = sent.id;
       saveLastMessages(lastMessages);
 
