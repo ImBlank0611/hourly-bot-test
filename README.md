@@ -146,12 +146,14 @@ Currently: Shower
 
 ## 🐋 Whale rules (any model)
 
-Each model's card shows each whale's rule for **today** in big text at the very top of the status box (no day name). If a whale has no rule for today, nothing is shown for that whale.
+Each model's card shows each whale's rule for **today** in a grey box at the very top (no day name). If a whale has no rule for today, nothing is shown for that whale. The text is colored:
 
-- 🟥 just talk, no selling (also shown on a sales day when the current shift is not allowed to sell)
-- 🟩 selling is on for this shift
-- 🟧 freestyle
-- 🟪 your own text, shown big
+- red: just talk, no selling (also shown on a sales day when the current shift is not allowed to sell)
+- green: selling is on for this shift
+- yellow: freestyle
+- purple: your own text
+
+Colors show on Discord desktop and web. On some phones the box shows without colors.
 
 ### Edit in Railway (no GitHub needed)
 
@@ -164,7 +166,7 @@ MODEL_2_WHALES="April(MONDAY-4PM, TUESDAY-CHAT, WEDNESDAY-8AM, THURSDAY-CHAT, FR
 - Format: `Name(DAY-rule, DAY-rule, ...)`. Several whales: separate with `;` or a new line.
 - Day: `MONDAY` or `MON`. Use `SAT+SUN` or `WEEKEND` for more than one day.
 - Rule:
-  - `4PM` or `8AM+4PM` means a sales day and only those shifts may sell (`12AM`, `8AM`, `4PM`). The box shows 🟩 when the current shift may sell and 🟥 when it may not.
+  - `4PM` or `8AM+4PM` means a sales day and only those shifts may sell (`12AM`, `8AM`, `4PM`). The text is green when the current shift may sell and red when it may not.
   - `CHAT` or `CHAT your note` means chat only.
   - `FREE your note` means freestyle.
   - Anything else is shown exactly as written.

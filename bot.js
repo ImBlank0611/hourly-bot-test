@@ -77,6 +77,21 @@ async function sweepOldCards(channel) {
   }
 }
 
+// Grey box (a code block) with colored text, used for the whale rule.
+// Colors only show inside an "ansi" code block.
+const ANSI = { red: "31", green: "32", yellow: "33", purple: "35" };
+function whaleBox({ name, tone, lines }) {
+  const esc = "\u001b[";
+  const clean = (t) => String(t).replace(/`/g, "'");
+  const [headline, ...rest] = lines.map(clean);
+  const body = [
+    `${esc}1;37m🐋 ${clean(name)}${esc}0m`,
+    `${esc}1;${ANSI[tone] || "37"}m${headline}${esc}0m`,
+    ...rest.map((r) => `${esc}0m${r}`),
+  ].join("\n");
+  return "```ansi\n" + body + "\n```\n";
+}
+
 const pad = (n) => String(n).padStart(2, "0");
 
 function toAmPm(hour, minute) {
@@ -256,18 +271,18 @@ async function sendHourlyUpdates() {
       const timeStr = formatTime(timezone);
       const emoji = getStatusEmoji(activity);
 
-      // Whale rules for today (whales.json and MODEL_n_WHALES): a quoted block at the top.
-      const quote = (text) => text.split("\n").map((l) => `> ${l}`).join("\n");
+      // Whale rules for today (whales.json and MODEL_n_WHALES): a grey box at the top,
+      // with colored text (red = no selling, green = selling on, yellow = freestyle).
       const whaleTop = getWhaleBlocks(model)
         .slice(0, 5)
-        .map((x) => quote(x.description))
-        .join("\n\n");
+        .map((x) => whaleBox(x))
+        .join("");
 
       const embed = new EmbedBuilder()
         .setColor(model.color || "#ff6b9d")
         .setTitle(`${emoji}  ${model.name}'s Status`)
         .setDescription(
-          (whaleTop ? whaleTop + "\n\n" : "") +
+          whaleTop +
           `## ${activity ? `${getStatusEmoji(activity)} ${activity.activity}` : "Off schedule 😴"}\n` +
           (activity ? `*${activity.startDisplay} → ${activity.endDisplay}*` : "")
         )
