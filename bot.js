@@ -18,6 +18,7 @@ if (process.env.BOT_TOKEN) {
       color: process.env[`MODEL_${i}_COLOR`] || "#ff6b9d",
       scheduleRaw: process.env[`MODEL_${i}_SCHEDULE`],
       notice: process.env[`MODEL_${i}_NOTICE`] || null,
+      whales: process.env[`MODEL_${i}_WHALES`] || null,
     });
     i++;
   }
@@ -30,6 +31,7 @@ if (process.env.BOT_TOKEN) {
       color: process.env.COLOR || "#ff6b9d",
       scheduleRaw: process.env.SCHEDULE,
       notice: process.env.NOTICE || null,
+      whales: process.env.WHALES || null,
     });
   }
 
@@ -289,8 +291,8 @@ async function sendHourlyUpdates() {
         embed.addFields({ name: "⚠️ Notice", value: `> ${model.notice}` });
       }
 
-      // Whale rules for today (from whales.json). Shows nothing if the model has none.
-      const whaleFields = getWhaleFields(model.name);
+      // Whale rules for today (from whales.json and MODEL_n_WHALES). Shows nothing if the model has none.
+      const whaleFields = getWhaleFields(model);
       if (whaleFields.length) embed.addFields(whaleFields);
 
       embed.setFooter({ text: `Hourly update • ${new Date().toUTCString()}` });

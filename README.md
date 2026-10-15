@@ -146,21 +146,29 @@ Currently: Shower
 
 ## 🐋 Whale rules (any model)
 
-`whales.json` controls the "whale of the day" box on each model's card. Only **today's** rule is shown.
+Each model's card can show a "whale of the day" box with **today's** rule only. If a whale has no rule for today, nothing is shown for that whale.
 
-- Add a model under `"models"` using the **same name** as in `config.json`. Models with no entry show nothing.
-- Each model can have as many whales as you want.
-- Each day is `chat` (talk only), `sales` (with `shifts`, like `["4pm"]`) or `free` (with a `note`).
-- Shifts are `12am`, `8am` and `4pm` (team time, 8 hours each). On a sales day the card also says if the current shift may sell.
-- To reuse one weekly pattern, put it in `templates` and set `"template": "name"` on the whale. Add `"days"` on the whale to override single days.
-- Days follow `Asia/Manila` unless you set `"timezone"` on the file or on a whale.
+### Edit in Railway (no GitHub needed)
 
-```json
-"models": {
-  "Olly": [ { "name": "April", "template": "standard-week" } ],
-  "Mia":  [ { "name": "Jay", "days": { "monday": { "mode": "chat" } } } ]
-}
+Add a variable `MODEL_n_WHALES` (same number `n` as that model's other variables):
+
 ```
+MODEL_2_WHALES="April(MONDAY-4PM, TUESDAY-CHAT, WEDNESDAY-8AM, THURSDAY-CHAT, FRIDAY-8AM, SAT+SUN-FREE only talk, sexting only if she asks, never offer first)"
+```
+
+- Format: `Name(DAY-rule, DAY-rule, ...)`. Several whales: separate with `;` or a new line.
+- Day: `MONDAY` or `MON`. Use `SAT+SUN` or `WEEKEND` for more than one day.
+- Rule:
+  - `4PM` or `8AM+4PM` means a sales day and only those shifts may sell (`12AM`, `8AM`, `4PM`). The card also says if the current shift may sell.
+  - `CHAT` or `CHAT your note` means chat only.
+  - `FREE your note` means freestyle.
+  - Anything else is shown exactly as written.
+- Days follow Manila time. Change it with the variable `WHALES_TIMEZONE` (for example `Asia/Manila`).
+- Bad entries are skipped and a warning shows in the deploy logs.
+
+### Edit in GitHub (optional)
+
+`whales.json` can hold rules too, including reusable weekly `templates`. If a whale is in both, the Railway variable wins for that whale.
 
 ---
 

@@ -71,26 +71,124 @@ function describe(rule, currentShift) {
     lines.push("🎲 **Freestyle**");
     lines.push(rule.note || "Mostly just talk.");
   } else {
-    lines.push(rule.note || "No rule set for today.");
+    lines.push("📌 " + (rule.note || "No rule set for today."));
   }
 
   return lines.join("\n");
 }
 
-// Returns embed fields (one per whale) for a model, showing only today's rule.
-// `now` is optional, used for testing.
-function getWhaleFields(modelName, now = new Date()) {
-  const rules = loadRules();
-  const list = (rules.models || {})[modelName];
-  if (!Array.isArray(list)) return [];
+// ── Railway variable support ─────────────────────────────────
+// MODEL_2_WHALES="April(MONDAY-4PM, TUESDAY-Just talk, SAT+SUN-FREE only talk); Jay(FRIDAY-8AM)"
+//   - Whales are separated by ; or a new line.   Name(rule, rule, ...)
+//   - Each rule is DAY-what to do. Day can be MONDAY, MON, SAT+SUN or WEEKEND.
+//   - What to do:
+//       4PM  or  8AM+4PM   -> sales day, only those shifts may sell
+//       CHAT <note>        -> chat only
+//       FREE <note>        -> freestyle
+//       anything else      -> shown as written
+const DAY_ALIASES = {
+  sun: "sunday", mon: "monday", tue: "tuesday", tues: "tuesday", wed: "wednesday",
+  thu: "thursday", thur: "thursday", thurs: "thursday", fri: "friday", sat: "saturday",
+};
 
+function resolveDays(token) {
+  const out = [];
+  for (const part of token.split(/[+&/]/)) {
+    const k = part.trim().toLowerCase();
+    if (!k) continue;
+    if (k === "weekend" || k === "weekends") { out.push("saturday", "sunday"); continue; }
+    const full = DAYS.includes(k) ? k : DAY_ALIASES[k] || DAY_ALIASES[k.slice(0, 3)];
+    if (full && (DAYS.includes(k) || DAY_ALIASES[k])) out.push(full);
+    else return null;
+  }
+  return out.length ? out : null;
+}
+
+const SHIFT_LIST = /^\d{1,2}\s*(am|pm)(\s*[+&/]\s*\d{1,2}\s*(am|pm))*$/i;
+
+function parseRule(text) {
+  const t = text.trim();
+  const noShiftWord = t.replace(/\s*shifts?$/i, "");
+  if (SHIFT_LIST.test(noShiftWord)) {
+    return { mode: "sales", shifts: noShiftWord.split(/[+&/]/).map(normShift) };
+  }
+  let m = t.match(/^chat\b[\s:.-]*(?:only\b[\s:.-]*)?(.*)$/i);
+  if (m) return { mode: "chat", note: m[1] || undefined };
+  m = t.match(/^free(style)?\b[\s:.-]*(?:only\b[\s:.-]*)?(.*)$/i);
+  if (m) return { mode: "free", note: m[2] || undefined };
+  return { mode: "text", note: t };
+}
+
+// Split "A, B" into rules, but only at commas followed by "DAY-"
+function splitRules(body) {
+  return body.split(/,\s*(?=[A-Za-z]+(?:\s*[+&/]\s*[A-Za-z]+)*\s*-)/);
+}
+
+// Split top level by ; or newline (ignoring ones inside parentheses)
+function splitWhales(raw) {
+  const parts = [];
+  let depth = 0, cur = "";
+  for (const ch of raw) {
+    if (ch === "(") depth++;
+    if (ch === ")") depth = Math.max(0, depth - 1);
+    if ((ch === ";" || ch === "\n") && depth === 0) { parts.push(cur); cur = ""; } else cur += ch;
+  }
+  parts.push(cur);
+  return parts.map((p) => p.trim()).filter(Boolean);
+}
+
+function parseWhalesEnv(raw, modelName = "") {
+  const whales = [];
+  if (!raw || !String(raw).trim()) return whales;
+  for (const chunk of splitWhales(String(raw))) {
+    const open = chunk.indexOf("(");
+    const close = chunk.lastIndexOf(")");
+    if (open < 1 || close < open) {
+      console.warn(`⚠️  ${modelName} WHALES: could not read "${chunk}". Use Name(DAY-rule, DAY-rule)`);
+      continue;
+    }
+    const name = chunk.slice(0, open).trim();
+    const days = {};
+    for (const rule of splitRules(chunk.slice(open + 1, close))) {
+      const dash = rule.indexOf("-");
+      if (dash < 1) { console.warn(`⚠️  ${modelName} ${name}: "${rule.trim()}" needs DAY-rule`); continue; }
+      const dayList = resolveDays(rule.slice(0, dash));
+      if (!dayList) { console.warn(`⚠️  ${modelName} ${name}: unknown day "${rule.slice(0, dash).trim()}"`); continue; }
+      const parsed = parseRule(rule.slice(dash + 1));
+      for (const d of dayList) days[d] = parsed;
+    }
+    whales.push({ name, days, fromEnv: true });
+  }
+  return whales;
+}
+
+// Returns embed fields (one per whale) for a model, showing only today's rule.
+// `model` can be the model name or the model object ({ name, whales }).
+// `now` is optional, used for testing.
+// Rules come from whales.json and from the Railway variable MODEL_n_WHALES.
+// If both define the same whale, the Railway variable wins for that whale.
+function getWhaleFields(model, now = new Date()) {
+  const modelName = typeof model === "string" ? model : model.name;
+  const envRaw = typeof model === "string" ? "" : model.whales;
+
+  const rules = loadRules();
+  const fromFile = Array.isArray((rules.models || {})[modelName]) ? rules.models[modelName] : [];
+  const fromEnv = parseWhalesEnv(envRaw, modelName);
+
+  const envNames = new Set(fromEnv.map((w) => w.name.toLowerCase()));
+  const list = [...fromFile.filter((w) => !envNames.has(String(w.name).toLowerCase())), ...fromEnv];
+  if (!list.length) return [];
+
+  const defaultTz = process.env.WHALES_TIMEZONE || rules.timezone || "Asia/Manila";
   const fields = [];
   for (const whale of list) {
-    const tz = whale.timezone || rules.timezone || "Asia/Manila";
+    const tz = whale.timezone || defaultTz;
     const { weekday, hour } = localParts(tz, now);
     const template = whale.template ? (rules.templates || {})[whale.template] : null;
     const days = { ...(template || {}), ...(whale.days || {}) };
     const dayName = weekday[0].toUpperCase() + weekday.slice(1);
+
+    if (!days[weekday]) continue; // no rule today = show nothing for this whale
 
     fields.push({
       name: `🐋 ${whale.name} · ${dayName}`,
@@ -100,4 +198,4 @@ function getWhaleFields(modelName, now = new Date()) {
   return fields;
 }
 
-module.exports = { getWhaleFields, DAYS };
+module.exports = { getWhaleFields, parseWhalesEnv, DAYS };
