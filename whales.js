@@ -1,5 +1,5 @@
 // ============================================================
-// Whale rules: shows TODAY's rule for each whale as a banner on top of a model's card.
+// Whale rules: shows TODAY's rule for each whale at the top of a model's card.
 // Rules live in whales.json so you never touch bot.js or config.json.
 // Works for any model: add an entry under "models" with that model's name
 // (same name as in config.json).
@@ -46,8 +46,8 @@ function shiftFor(hour) {
 
 const normShift = (s) => String(s).toLowerCase().replace(/\s+/g, "");
 
-// Turn one day's rule into a big, colored banner (its own embed, shown at the
-// top of the card so chatters see it first). No day name is shown.
+// Turn one day's rule into a big block of text (colored square + large heading),
+// shown at the top of the card so chatters see it first. No day name is shown.
 const RED = 0xef4444, GREEN = 0x22c55e, AMBER = 0xf59e0b, PURPLE = 0x8b5cf6;
 
 function render(whaleName, rule, currentShift) {
@@ -56,7 +56,7 @@ function render(whaleName, rule, currentShift) {
   const note = rule && rule.note ? `\n**${rule.note}**` : "";
 
   if (rule.mode === "chat") {
-    return { color: RED, description: head + "# 💬 JUST TALK. NO SELLING." + note };
+    return { color: RED, description: head + "# 🟥 JUST TALK. NO SELLING." + note };
   }
 
   if (rule.mode === "sales") {
@@ -65,22 +65,22 @@ function render(whaleName, rule, currentShift) {
       const which = shifts.length ? ` (${shifts.join(" + ")} shift)` : "";
       return {
         color: GREEN,
-        description: head + `# 💰 SELLING IS ON${which}` + (shifts.length ? "\nOther shifts: just talk." : "") + note,
+        description: head + `# 🟩 SELLING IS ON${which}` + (shifts.length ? "\nOther shifts: just talk." : "") + note,
       };
     }
     return {
       color: RED,
       description:
-        head + "# 💬 JUST TALK RIGHT NOW. NO SELLING." + `\nSelling today is only for the **${shifts.join(" + ")}** shift.` + note,
+        head + "# 🟥 JUST TALK RIGHT NOW. NO SELLING." + `\nSelling today is only for the **${shifts.join(" + ")}** shift.` + note,
     };
   }
 
   if (rule.mode === "free") {
-    return { color: AMBER, description: head + "# 🎲 FREESTYLE" + note };
+    return { color: AMBER, description: head + "# 🟧 FREESTYLE" + note };
   }
 
   const text = rule.note || "See notes";
-  return { color: PURPLE, description: head + (text.length > 80 ? `## 📌 ${text}` : `# 📌 ${text}`) };
+  return { color: PURPLE, description: head + (text.length > 80 ? `## 🟪 ${text}` : `# 🟪 ${text}`) };
 }
 
 // ── Railway variable support ─────────────────────────────────
@@ -168,13 +168,13 @@ function parseWhalesEnv(raw, modelName = "") {
   return whales;
 }
 
-// Returns one banner per whale for a model, showing only today's rule.
+// Returns one text block per whale for a model, showing only today's rule.
 // `model` can be the model name or the model object ({ name, whales }).
 // `now` is optional, used for testing.
 // Rules come from whales.json and from the Railway variable MODEL_n_WHALES.
 // If both define the same whale, the Railway variable wins for that whale.
 // A whale with no rule today shows nothing.
-function getWhaleEmbeds(model, now = new Date()) {
+function getWhaleBlocks(model, now = new Date()) {
   const modelName = typeof model === "string" ? model : model.name;
   const envRaw = typeof model === "string" ? "" : model.whales;
 
@@ -201,4 +201,4 @@ function getWhaleEmbeds(model, now = new Date()) {
   return banners;
 }
 
-module.exports = { getWhaleEmbeds, parseWhalesEnv, DAYS };
+module.exports = { getWhaleBlocks, parseWhalesEnv, DAYS };

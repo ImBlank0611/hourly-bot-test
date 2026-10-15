@@ -2,7 +2,7 @@ const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const cron = require("node-cron");
 const fs = require("fs");
 const { resolveTimezone } = require("./timezones");
-const { getWhaleEmbeds } = require("./whales");
+const { getWhaleBlocks } = require("./whales");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -61,12 +61,6 @@ const lastMessages = loadLastMessages();
 // Cards disappear on their own after this long (default 60 min).
 // Set CARD_LIFETIME_MINUTES in Railway to change it.
 const CARD_LIFETIME_MS = (Number(process.env.CARD_LIFETIME_MINUTES) || 60) * 60 * 1000;
-
-// Discord sizes an embed to its content, so a short banner comes out narrower than
-// the status card. This adds an invisible line so both boxes stretch to full width.
-// If the boxes still look different, change CARD_PAD_CHARS in Railway (try 40 to 90).
-const PAD_CHARS = Number(process.env.CARD_PAD_CHARS) || 60;
-const WIDTH_PAD = "\n-# " + "\u3164".repeat(PAD_CHARS);
 
 // Delete any card this bot posted earlier (used on startup, so a redeploy
 // that wipes lastMessages.json doesn't leave a stray card behind).
@@ -262,18 +256,19 @@ async function sendHourlyUpdates() {
       const timeStr = formatTime(timezone);
       const emoji = getStatusEmoji(activity);
 
+      // Whale rules for today (whales.json and MODEL_n_WHALES) go at the very top, in big text.
+      const whaleBlocks = getWhaleBlocks(model).slice(0, 5).map((x) => x.description);
+      const whaleTop = whaleBlocks.length ? whaleBlocks.join("\n\n") + "\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n" : "";
+
       const embed = new EmbedBuilder()
         .setColor(model.color || "#ff6b9d")
         .setTitle(`${emoji}  ${model.name}'s Status`)
         .setDescription(
+          whaleTop +
           `# ${activity ? `${getStatusEmoji(activity)} ${activity.activity}` : "Off schedule 😴"}\n` +
-          (activity ? `### ${activity.startDisplay} → ${activity.endDisplay}\n` : "") +
-          (next ? `## ⏭️ Up Next: ${getStatusEmoji(next)} **${next.activity}** at **${next.startDisplay}**` : "") +
-          WIDTH_PAD
-        )
-        .addFields(
-          { name: "🕐 Local Time", value: `\`\`\`${timeStr}\`\`\``, inline: true },
-          { name: "📍 Location", value: `\`\`\`${model.location}\`\`\``, inline: true },
+          (activity ? `## ${activity.startDisplay} → ${activity.endDisplay}\n` : "") +
+          (next ? `## ⏭️ Up Next: ${getStatusEmoji(next)} **${next.activity}** at **${next.startDisplay}**\n` : "") +
+          `## 🕐 ${timeStr}  ·  📍 ${model.location}`
         );
 
       if (model.notice) {
@@ -283,12 +278,7 @@ async function sendHourlyUpdates() {
       embed.setFooter({ text: `Hourly update • ${new Date().toUTCString()}` });
       embed.setTimestamp();
 
-      // Whale banners (from whales.json and MODEL_n_WHALES) go on top so they get seen first.
-      const whaleBanners = getWhaleEmbeds(model)
-        .slice(0, 9)
-        .map((w) => new EmbedBuilder().setColor(w.color).setDescription(w.description + WIDTH_PAD));
-
-      const sent = await channel.send({ embeds: [...whaleBanners, embed] });
+      const sent = await channel.send({ embeds: [embed] });
       lastMessages[model.channelId] = sent.id;
       saveLastMessages(lastMessages);
 
