@@ -111,6 +111,8 @@ const LOCATION_MAP = {
 
   // 🇩🇪 Germany
   "germany": "Europe/Berlin",
+  "norway": "Europe/Oslo",
+  "oslo": "Europe/Oslo",
   "berlin": "Europe/Berlin",
   "munich": "Europe/Berlin",
 

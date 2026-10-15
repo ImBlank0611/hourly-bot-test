@@ -141,3 +141,31 @@ Currently: Shower
 ⏭️ Up Next
 🥗 Lunch at 13:00
 ```
+
+---
+
+## 🐋 Whale rules (any model)
+
+`whales.json` controls the "whale of the day" box on each model's card. Only **today's** rule is shown.
+
+- Add a model under `"models"` using the **same name** as in `config.json`. Models with no entry show nothing.
+- Each model can have as many whales as you want.
+- Each day is `chat` (talk only), `sales` (with `shifts`, like `["4pm"]`) or `free` (with a `note`).
+- Shifts are `12am`, `8am` and `4pm` (team time, 8 hours each). On a sales day the card also says if the current shift may sell.
+- To reuse one weekly pattern, put it in `templates` and set `"template": "name"` on the whale. Add `"days"` on the whale to override single days.
+- Days follow `Asia/Manila` unless you set `"timezone"` on the file or on a whale.
+
+```json
+"models": {
+  "Olly": [ { "name": "April", "template": "standard-week" } ],
+  "Mia":  [ { "name": "Jay", "days": { "monday": { "mode": "chat" } } } ]
+}
+```
+
+---
+
+## 🧹 Cards clean themselves up
+
+- Each hourly card is deleted automatically after 60 minutes. Change this with the Railway variable `CARD_LIFETIME_MINUTES` (default `60`).
+- On startup the bot also deletes any old cards it posted in the last 50 messages of each model channel, so a redeploy never leaves a stray card behind.
+- The bot needs **View Channel**, **Send Messages**, **Embed Links** and **Read Message History** in each channel.

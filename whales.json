@@ -1,0 +1,21 @@
+{
+  "timezone": "Asia/Manila",
+
+  "templates": {
+    "standard-week": {
+      "monday":    { "mode": "sales", "shifts": ["4pm"] },
+      "tuesday":   { "mode": "chat",  "note": "Everyone just talks to her. No selling." },
+      "wednesday": { "mode": "sales", "shifts": ["8am"] },
+      "thursday":  { "mode": "chat",  "note": "Chatting only." },
+      "friday":    { "mode": "sales", "shifts": ["8am"] },
+      "saturday":  { "mode": "free",  "note": "Mostly just talk. Sexting only if she asks for it. Do NOT offer it first." },
+      "sunday":    { "mode": "free",  "note": "Mostly just talk. Sexting only if she asks for it. Do NOT offer it first." }
+    }
+  },
+
+  "models": {
+    "Olly": [
+      { "name": "April", "template": "standard-week" }
+    ]
+  }
+}

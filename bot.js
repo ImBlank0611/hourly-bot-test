@@ -2,6 +2,7 @@ const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const cron = require("node-cron");
 const fs = require("fs");
 const { resolveTimezone } = require("./timezones");
+const { getWhaleFields } = require("./whales");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -54,6 +55,25 @@ function saveLastMessages(data) {
   try { fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2)); } catch (e) {}
 }
 const lastMessages = loadLastMessages();
+
+// Cards disappear on their own after this long (default 60 min).
+// Set CARD_LIFETIME_MINUTES in Railway to change it.
+const CARD_LIFETIME_MS = (Number(process.env.CARD_LIFETIME_MINUTES) || 60) * 60 * 1000;
+
+// Delete any card this bot posted earlier (used on startup, so a redeploy
+// that wipes lastMessages.json doesn't leave a stray card behind).
+async function sweepOldCards(channel) {
+  try {
+    const recent = await channel.messages.fetch({ limit: 50 });
+    const mine = recent.filter((m) => m.author.id === client.user.id && m.embeds.length > 0);
+    for (const m of mine.values()) {
+      try { await m.delete(); } catch (e) {}
+    }
+    if (mine.size) console.log(`Cleaned up ${mine.size} old card(s) in #${channel.name || channel.id}`);
+  } catch (e) {
+    console.warn("Could not clean old cards (needs Read Message History): " + e.message);
+  }
+}
 
 const pad = (n) => String(n).padStart(2, "0");
 
@@ -269,12 +289,19 @@ async function sendHourlyUpdates() {
         embed.addFields({ name: "⚠️ Notice", value: `> ${model.notice}` });
       }
 
+      // Whale rules for today (from whales.json). Shows nothing if the model has none.
+      const whaleFields = getWhaleFields(model.name);
+      if (whaleFields.length) embed.addFields(whaleFields);
+
       embed.setFooter({ text: `Hourly update • ${new Date().toUTCString()}` });
       embed.setTimestamp();
 
       const sent = await channel.send({ embeds: [embed] });
       lastMessages[model.channelId] = sent.id;
       saveLastMessages(lastMessages);
+
+      // Remove this card automatically after its lifetime
+      setTimeout(() => { sent.delete().catch(() => {}); }, CARD_LIFETIME_MS);
       console.log("Sent update for " + model.name);
     } catch (err) {
       console.error("Error for " + model.name + ": " + err.message);
@@ -282,8 +309,14 @@ async function sendHourlyUpdates() {
   }
 }
 
-client.once("clientReady", () => {
+client.once("clientReady", async () => {
   console.log("Bot logged in as " + client.user.tag);
+  for (const model of config.models) {
+    try {
+      const channel = await client.channels.fetch(model.channelId);
+      if (channel) await sweepOldCards(channel);
+    } catch (e) {}
+  }
   sendHourlyUpdates();
   cron.schedule("0 * * * *", sendHourlyUpdates);
 });
