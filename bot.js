@@ -256,19 +256,22 @@ async function sendHourlyUpdates() {
       const timeStr = formatTime(timezone);
       const emoji = getStatusEmoji(activity);
 
-      // Whale rules for today (whales.json and MODEL_n_WHALES) go at the very top, in big text.
-      const whaleBlocks = getWhaleBlocks(model).slice(0, 5).map((x) => x.description);
-      const whaleTop = whaleBlocks.length ? whaleBlocks.join("\n\n") + "\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n" : "";
+      // Whale rules for today (whales.json and MODEL_n_WHALES): a quoted block at the very top.
+      const quote = (text) => text.split("\n").map((l) => `> ${l}`).join("\n");
+      const whaleTop = getWhaleBlocks(model)
+        .slice(0, 5)
+        .map((x) => quote(x.description))
+        .join("\n\n");
 
       const embed = new EmbedBuilder()
         .setColor(model.color || "#ff6b9d")
         .setTitle(`${emoji}  ${model.name}'s Status`)
         .setDescription(
-          whaleTop +
+          (whaleTop ? whaleTop + "\n\n" : "") +
           `# ${activity ? `${getStatusEmoji(activity)} ${activity.activity}` : "Off schedule 😴"}\n` +
-          (activity ? `## ${activity.startDisplay} → ${activity.endDisplay}\n` : "") +
-          (next ? `## ⏭️ Up Next: ${getStatusEmoji(next)} **${next.activity}** at **${next.startDisplay}**\n` : "") +
-          `## 🕐 ${timeStr}  ·  📍 ${model.location}`
+          (activity ? `### 🕛 ${activity.startDisplay} → ${activity.endDisplay}\n\n` : "") +
+          (next ? `### ⏭️ Up Next  ·  ${getStatusEmoji(next)} ${next.activity} at ${next.startDisplay}\n` : "") +
+          `### 🕐 ${timeStr}  ·  📍 ${model.location}`
         );
 
       if (model.notice) {

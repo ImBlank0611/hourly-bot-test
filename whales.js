@@ -52,7 +52,7 @@ const RED = 0xef4444, GREEN = 0x22c55e, AMBER = 0xf59e0b, PURPLE = 0x8b5cf6;
 
 function render(whaleName, rule, currentShift) {
   const name = String(whaleName).toUpperCase();
-  const head = `## 🐋 ${name}\n`;
+  const head = `**🐋 ${name}**\n`;
   const note = rule && rule.note ? `\n**${rule.note}**` : "";
 
   if (rule.mode === "chat") {
