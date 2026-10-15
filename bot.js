@@ -236,8 +236,21 @@ function getNextActivity(schedule, timezone) {
   return schedule[0];
 }
 
-function buildTodaySchedule(schedule) {
-  return schedule
+// Only show schedule items that have already started in the model's own time,
+// so the day is revealed hour by hour (what's coming is shown by "Up Next").
+function buildTodaySchedule(schedule, timezone, activity, now = new Date()) {
+  const local = new Date(now.toLocaleString("en-US", { timeZone: timezone }));
+  const currentMinutes = local.getHours() * 60 + local.getMinutes();
+
+  let visible = schedule.filter((block) => {
+    const [sh, sm] = block.start.split(":").map(Number);
+    return sh * 60 + sm <= currentMinutes;
+  });
+
+  // Early hours: the current block started yesterday, so show it on its own
+  if (activity && !visible.includes(activity)) visible = [...visible, activity];
+
+  return visible
     .map(block => `${getStatusEmoji(block)} \`${block.startDisplay}\` ${block.activity}`)
     .join("\n");
 }
@@ -261,7 +274,7 @@ async function sendHourlyUpdates() {
       const next = getNextActivity(schedule, timezone);
       const timeStr = formatTime(timezone);
       const emoji = getStatusEmoji(activity);
-      const todaySchedule = buildTodaySchedule(schedule);
+      const todaySchedule = buildTodaySchedule(schedule, timezone, activity);
 
       const embed = new EmbedBuilder()
         .setColor(model.color || "#ff6b9d")
@@ -282,10 +295,12 @@ async function sendHourlyUpdates() {
         });
       }
 
-      embed.addFields({
-        name: "📅 Today's Schedule",
-        value: todaySchedule,
-      });
+      if (todaySchedule) {
+        embed.addFields({
+          name: "📅 Today's Schedule",
+          value: todaySchedule,
+        });
+      }
 
       if (model.notice) {
         embed.addFields({ name: "⚠️ Notice", value: `> ${model.notice}` });
