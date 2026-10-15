@@ -1,5 +1,5 @@
 // ============================================================
-// Whale rules: shows TODAY's rule for each whale on a model's card.
+// Whale rules: shows TODAY's rule for each whale as a banner on top of a model's card.
 // Rules live in whales.json so you never touch bot.js or config.json.
 // Works for any model: add an entry under "models" with that model's name
 // (same name as in config.json).
@@ -46,35 +46,41 @@ function shiftFor(hour) {
 
 const normShift = (s) => String(s).toLowerCase().replace(/\s+/g, "");
 
-// Turn one day's rule into text for the card
-function describe(rule, currentShift) {
-  if (!rule) return "No rule set for today.";
-  const lines = [];
+// Turn one day's rule into a big, colored banner (its own embed, shown at the
+// top of the card so chatters see it first). No day name is shown.
+const RED = 0xef4444, GREEN = 0x22c55e, AMBER = 0xf59e0b, PURPLE = 0x8b5cf6;
+
+function render(whaleName, rule, currentShift) {
+  const name = String(whaleName).toUpperCase();
+  const head = `## 🐋 ${name}\n`;
+  const note = rule && rule.note ? `\n**${rule.note}**` : "";
 
   if (rule.mode === "chat") {
-    lines.push("💬 **Chat only**");
-    lines.push(rule.note || "Just talk. No selling today.");
-  } else if (rule.mode === "sales") {
-    const shifts = (rule.shifts || []).map(normShift);
-    const label = shifts.length ? shifts.join(" + ") + " shift only" : "all shifts";
-    lines.push(`💰 **Sales day: ${label}**`);
-    if (shifts.length) {
-      lines.push("Other shifts: chat only.");
-      lines.push(
-        shifts.includes(currentShift)
-          ? `Right now (${currentShift} shift): ✅ you can go for sales`
-          : `Right now (${currentShift} shift): 💬 chat only`
-      );
-    }
-    if (rule.note) lines.push(rule.note);
-  } else if (rule.mode === "free") {
-    lines.push("🎲 **Freestyle**");
-    lines.push(rule.note || "Mostly just talk.");
-  } else {
-    lines.push("📌 " + (rule.note || "No rule set for today."));
+    return { color: RED, description: head + "# 💬 JUST TALK. NO SELLING." + note };
   }
 
-  return lines.join("\n");
+  if (rule.mode === "sales") {
+    const shifts = (rule.shifts || []).map(normShift);
+    if (!shifts.length || shifts.includes(currentShift)) {
+      const which = shifts.length ? ` (${shifts.join(" + ")} shift)` : "";
+      return {
+        color: GREEN,
+        description: head + `# 💰 SELLING IS ON${which}` + (shifts.length ? "\nOther shifts: just talk." : "") + note,
+      };
+    }
+    return {
+      color: RED,
+      description:
+        head + "# 💬 JUST TALK RIGHT NOW. NO SELLING." + `\nSelling today is only for the **${shifts.join(" + ")}** shift.` + note,
+    };
+  }
+
+  if (rule.mode === "free") {
+    return { color: AMBER, description: head + "# 🎲 FREESTYLE" + note };
+  }
+
+  const text = rule.note || "See notes";
+  return { color: PURPLE, description: head + (text.length > 80 ? `## 📌 ${text}` : `# 📌 ${text}`) };
 }
 
 // ── Railway variable support ─────────────────────────────────
@@ -112,9 +118,9 @@ function parseRule(text) {
   if (SHIFT_LIST.test(noShiftWord)) {
     return { mode: "sales", shifts: noShiftWord.split(/[+&/]/).map(normShift) };
   }
-  let m = t.match(/^chat\b[\s:.-]*(?:only\b[\s:.-]*)?(.*)$/i);
+  let m = t.match(/^chat\b[\s:.-]*(?:only\s*$)?(.*)$/i);
   if (m) return { mode: "chat", note: m[1] || undefined };
-  m = t.match(/^free(style)?\b[\s:.-]*(?:only\b[\s:.-]*)?(.*)$/i);
+  m = t.match(/^free(style)?\b[\s:.-]*(?:only\s*$)?(.*)$/i);
   if (m) return { mode: "free", note: m[2] || undefined };
   return { mode: "text", note: t };
 }
@@ -162,12 +168,13 @@ function parseWhalesEnv(raw, modelName = "") {
   return whales;
 }
 
-// Returns embed fields (one per whale) for a model, showing only today's rule.
+// Returns one banner per whale for a model, showing only today's rule.
 // `model` can be the model name or the model object ({ name, whales }).
 // `now` is optional, used for testing.
 // Rules come from whales.json and from the Railway variable MODEL_n_WHALES.
 // If both define the same whale, the Railway variable wins for that whale.
-function getWhaleFields(model, now = new Date()) {
+// A whale with no rule today shows nothing.
+function getWhaleEmbeds(model, now = new Date()) {
   const modelName = typeof model === "string" ? model : model.name;
   const envRaw = typeof model === "string" ? "" : model.whales;
 
@@ -177,25 +184,21 @@ function getWhaleFields(model, now = new Date()) {
 
   const envNames = new Set(fromEnv.map((w) => w.name.toLowerCase()));
   const list = [...fromFile.filter((w) => !envNames.has(String(w.name).toLowerCase())), ...fromEnv];
-  if (!list.length) return [];
 
   const defaultTz = process.env.WHALES_TIMEZONE || rules.timezone || "Asia/Manila";
-  const fields = [];
+  const banners = [];
   for (const whale of list) {
     const tz = whale.timezone || defaultTz;
     const { weekday, hour } = localParts(tz, now);
     const template = whale.template ? (rules.templates || {})[whale.template] : null;
     const days = { ...(template || {}), ...(whale.days || {}) };
-    const dayName = weekday[0].toUpperCase() + weekday.slice(1);
+    if (!days[weekday]) continue;
 
-    if (!days[weekday]) continue; // no rule today = show nothing for this whale
-
-    fields.push({
-      name: `🐋 ${whale.name} · ${dayName}`,
-      value: describe(days[weekday], shiftFor(hour)).slice(0, 1024),
-    });
+    const banner = render(whale.name, days[weekday], shiftFor(hour));
+    banner.description = banner.description.slice(0, 4000);
+    banners.push(banner);
   }
-  return fields;
+  return banners;
 }
 
-module.exports = { getWhaleFields, parseWhalesEnv, DAYS };
+module.exports = { getWhaleEmbeds, parseWhalesEnv, DAYS };

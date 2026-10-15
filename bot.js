@@ -2,7 +2,7 @@ const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const cron = require("node-cron");
 const fs = require("fs");
 const { resolveTimezone } = require("./timezones");
-const { getWhaleFields } = require("./whales");
+const { getWhaleEmbeds } = require("./whales");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -291,14 +291,15 @@ async function sendHourlyUpdates() {
         embed.addFields({ name: "⚠️ Notice", value: `> ${model.notice}` });
       }
 
-      // Whale rules for today (from whales.json and MODEL_n_WHALES). Shows nothing if the model has none.
-      const whaleFields = getWhaleFields(model);
-      if (whaleFields.length) embed.addFields(whaleFields);
-
       embed.setFooter({ text: `Hourly update • ${new Date().toUTCString()}` });
       embed.setTimestamp();
 
-      const sent = await channel.send({ embeds: [embed] });
+      // Whale banners (from whales.json and MODEL_n_WHALES) go on top so they get seen first.
+      const whaleBanners = getWhaleEmbeds(model)
+        .slice(0, 9)
+        .map((w) => new EmbedBuilder().setColor(w.color).setDescription(w.description));
+
+      const sent = await channel.send({ embeds: [...whaleBanners, embed] });
       lastMessages[model.channelId] = sent.id;
       saveLastMessages(lastMessages);
 
