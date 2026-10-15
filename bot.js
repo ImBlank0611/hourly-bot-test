@@ -62,6 +62,12 @@ const lastMessages = loadLastMessages();
 // Set CARD_LIFETIME_MINUTES in Railway to change it.
 const CARD_LIFETIME_MS = (Number(process.env.CARD_LIFETIME_MINUTES) || 60) * 60 * 1000;
 
+// Discord sizes an embed to its content, so a short banner comes out narrower than
+// the status card. This adds an invisible line so both boxes stretch to full width.
+// If the boxes still look different, change CARD_PAD_CHARS in Railway (try 40 to 90).
+const PAD_CHARS = Number(process.env.CARD_PAD_CHARS) || 60;
+const WIDTH_PAD = "\n-# " + "\u3164".repeat(PAD_CHARS);
+
 // Delete any card this bot posted earlier (used on startup, so a redeploy
 // that wipes lastMessages.json doesn't leave a stray card behind).
 async function sweepOldCards(channel) {
@@ -236,25 +242,6 @@ function getNextActivity(schedule, timezone) {
   return schedule[0];
 }
 
-// Only show schedule items that have already started in the model's own time,
-// so the day is revealed hour by hour (what's coming is shown by "Up Next").
-function buildTodaySchedule(schedule, timezone, activity, now = new Date()) {
-  const local = new Date(now.toLocaleString("en-US", { timeZone: timezone }));
-  const currentMinutes = local.getHours() * 60 + local.getMinutes();
-
-  let visible = schedule.filter((block) => {
-    const [sh, sm] = block.start.split(":").map(Number);
-    return sh * 60 + sm <= currentMinutes;
-  });
-
-  // Early hours: the current block started yesterday, so show it on its own
-  if (activity && !visible.includes(activity)) visible = [...visible, activity];
-
-  return visible
-    .map(block => `${getStatusEmoji(block)} \`${block.startDisplay}\` ${block.activity}`)
-    .join("\n");
-}
-
 async function sendHourlyUpdates() {
   for (const model of config.models) {
     try {
@@ -274,33 +261,20 @@ async function sendHourlyUpdates() {
       const next = getNextActivity(schedule, timezone);
       const timeStr = formatTime(timezone);
       const emoji = getStatusEmoji(activity);
-      const todaySchedule = buildTodaySchedule(schedule, timezone, activity);
 
       const embed = new EmbedBuilder()
         .setColor(model.color || "#ff6b9d")
         .setTitle(`${emoji}  ${model.name}'s Status`)
         .setDescription(
-          `## ${activity ? `${getStatusEmoji(activity)} ${activity.activity}` : "Off schedule 😴"}\n` +
-          (activity ? `*${activity.startDisplay} → ${activity.endDisplay}*` : "")
+          `# ${activity ? `${getStatusEmoji(activity)} ${activity.activity}` : "Off schedule 😴"}\n` +
+          (activity ? `### ${activity.startDisplay} → ${activity.endDisplay}\n` : "") +
+          (next ? `## ⏭️ Up Next: ${getStatusEmoji(next)} **${next.activity}** at **${next.startDisplay}**` : "") +
+          WIDTH_PAD
         )
         .addFields(
           { name: "🕐 Local Time", value: `\`\`\`${timeStr}\`\`\``, inline: true },
           { name: "📍 Location", value: `\`\`\`${model.location}\`\`\``, inline: true },
         );
-
-      if (next) {
-        embed.addFields({
-          name: "⏭️ Up Next",
-          value: `${getStatusEmoji(next)} **${next.activity}** at **${next.startDisplay}**`,
-        });
-      }
-
-      if (todaySchedule) {
-        embed.addFields({
-          name: "📅 Today's Schedule",
-          value: todaySchedule,
-        });
-      }
 
       if (model.notice) {
         embed.addFields({ name: "⚠️ Notice", value: `> ${model.notice}` });
@@ -312,7 +286,7 @@ async function sendHourlyUpdates() {
       // Whale banners (from whales.json and MODEL_n_WHALES) go on top so they get seen first.
       const whaleBanners = getWhaleEmbeds(model)
         .slice(0, 9)
-        .map((w) => new EmbedBuilder().setColor(w.color).setDescription(w.description));
+        .map((w) => new EmbedBuilder().setColor(w.color).setDescription(w.description + WIDTH_PAD));
 
       const sent = await channel.send({ embeds: [...whaleBanners, embed] });
       lastMessages[model.channelId] = sent.id;
