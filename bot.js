@@ -77,12 +77,6 @@ async function sweepOldCards(channel) {
   }
 }
 
-// A taller grey box for a value (a blank line above and below it).
-// Text inside a code block can't be made bigger in Discord, only the box.
-function bigBox(text) {
-  return "```\n\u2800\n" + String(text) + "\n\u2800\n```";
-}
-
 const pad = (n) => String(n).padStart(2, "0");
 
 function toAmPm(hour, minute) {
@@ -276,11 +270,8 @@ async function sendHourlyUpdates() {
           (whaleTop ? whaleTop + "\n\n" : "") +
           `# ${activity ? `${getStatusEmoji(activity)} ${activity.activity}` : "Off schedule 😴"}\n` +
           (activity ? `### 🕛 ${activity.startDisplay} → ${activity.endDisplay}\n\n` : "") +
-          (next ? `### ⏭️ Up Next  ·  ${getStatusEmoji(next)} ${next.activity} at ${next.startDisplay}` : "")
-        )
-        .addFields(
-          { name: "🕐 Local Time", value: bigBox(timeStr), inline: true },
-          { name: "📍 Location", value: bigBox(model.location), inline: true },
+          (next ? `### ⏭️ Up Next  ·  ${getStatusEmoji(next)} ${next.activity} at ${next.startDisplay}\n\n` : "") +
+          `## 🕐 ${timeStr}  ·  📍 ${model.location}`
         );
 
       if (model.notice) {
